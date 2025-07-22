@@ -9,31 +9,42 @@ if (!connectionString) {
 // Detectar el entorno
 const isProduction = process.env.NODE_ENV === 'production';
 const isLocalProxy = connectionString.includes('localhost');
-const isFlyDatabase = connectionString.includes('66.241.124.206') || connectionString.includes('flycast');
+const isFlyDatabase = connectionString.includes('.fly.dev') || connectionString.includes('flycast') || connectionString.includes('66.241.124.206');
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
 
 // Configuración específica para cada entorno
 let dbConfig: any = {
   connectionString,
-  // Configuración específica para Fly.io desde Vercel
   ssl: false
 };
 
-if (isProduction && isFlyDatabase) {
-  // Configuración específica para Fly.io en producción
-  dbConfig = {
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-      sslmode: 'require'
-    },
-    connectionTimeoutMillis: 60000,
-    idleTimeoutMillis: 30000,
-    query_timeout: 30000,
-    statement_timeout: 30000,
-    max: 5,  // Reducir conexiones para evitar saturar Fly.io
-    min: 1,
-    allowExitOnIdle: true
-  };
+if (isFlyDatabase) {
+  if (isVercel || connectionString.includes('.fly.dev')) {
+    // Configuración para conexiones externas desde Vercel a Fly.io
+    dbConfig = {
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false,
+        sslmode: 'require'
+      },
+      connectionTimeoutMillis: 60000,
+      idleTimeoutMillis: 30000,
+      query_timeout: 30000,
+      statement_timeout: 30000,
+      max: 3,  // Reducir conexiones para Vercel (serverless)
+      min: 0,  // Sin conexiones mínimas para serverless
+      allowExitOnIdle: true
+    };
+  } else {
+    // Configuración para conexiones internas en Fly.io
+    dbConfig = {
+      connectionString,
+      ssl: false,  // No SSL para conexiones internas en Fly.io
+      max: 5,
+      min: 1,
+      allowExitOnIdle: true
+    };
+  }
 } else if (isLocalProxy) {
   // Configuración para desarrollo local con proxy
   dbConfig = {
@@ -48,7 +59,9 @@ console.log('Configuración DB:', {
   isProduction,
   isLocalProxy,
   isFlyDatabase,
-  sslEnabled: !!dbConfig.ssl
+  isVercel,
+  sslEnabled: !!dbConfig.ssl,
+  connectionString: connectionString?.replace(/:[^:@]*@/, ':***@') // Ocultar password en logs
 });
 
 // Pool de conexiones

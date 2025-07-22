@@ -1,6 +1,41 @@
-# 🚀 Guía de Despliegue - Hotel Paraíso Backend
+# Guía de Despliegue en Vercel - Hotel Paraíso Backend
 
-Esta guía te llevará paso a paso para desplegar el backend en **Vercel** de manera exitosa.
+Esta guía te ayudará a desplegar el backend del Hotel Paraíso en Vercel con base de datos en Fly.io.
+
+## ⚠️ CONFIGURACIÓN CRÍTICA: DATABASE_URL para Vercel
+
+**Para conexiones externas desde Vercel a Fly.io PostgreSQL, DEBES usar:**
+
+```bash
+DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@paraisobd-db.fly.dev:5432/postgres?sslmode=require
+```
+
+### 🚫 Errores Comunes a Evitar:
+
+```bash
+# ❌ INCORRECTO - Usar .flycast (solo funciona internamente en Fly.io):
+DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@paraisobd-db.flycast:5432
+
+# ❌ INCORRECTO - Usar IP directa (Vercel no soporta IPv6 saliente):
+DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@66.241.124.206:5432
+
+# ❌ INCORRECTO - Sin SSL (requerido para conexiones externas):
+DATABASE_URL=postgres://...?sslmode=disable
+```
+
+### ✅ Configuración Correcta:
+
+```bash
+# ✅ CORRECTO - Dominio .fly.dev con SSL requerido:
+DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@paraisobd-db.fly.dev:5432/postgres?sslmode=require
+```
+
+**¿Por qué .fly.dev?**
+- Fly.io enruta automáticamente desde dominios .fly.dev
+- Funciona con IPv4 (compatible con Vercel)
+- Habilita SSL/TLS automáticamente para conexiones externas
+
+---
 
 ## ✅ Pre-requisitos
 
@@ -17,7 +52,13 @@ Antes de desplegar, asegúrate de que:
 
 ```bash
 # Base de datos (CRÍTICO)
-DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@paraisobd-db.flycast:5432
+# ✅ CONFIGURACIÓN CORRECTA para Fly.io PostgreSQL desde Vercel:
+DATABASE_URL=postgres://postgres:ehsWijNq5CGG9lv@paraisobd-db.fly.dev:5432/postgres?sslmode=require
+
+# ⚠️ ERRORES COMUNES A EVITAR:
+# ❌ NO usar .flycast: @paraisobd-db.flycast:5432 (solo funciona internamente)
+# ❌ NO usar IP directa: @66.241.124.206:5432 (Vercel no soporta IPv6)
+# ❌ NO usar sslmode=disable (requerido para conexiones externas)
 
 # Autenticación (CRÍTICO)
 NEXTAUTH_SECRET=una-clave-muy-segura-y-larga-para-produccion-123456789
