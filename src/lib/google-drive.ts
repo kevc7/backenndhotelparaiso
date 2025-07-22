@@ -1,79 +1,48 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import { OAuth2Client } from 'google-auth-library';
-import fs from 'fs';
-import path from 'path';
 
-// Configuración de Google Drive con OAuth 2.0
-const SCOPES = [
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/drive.readonly'
-];
-
-// Crear cliente OAuth 2.0
-function getOAuth2Client(): OAuth2Client {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
-
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error('Faltan variables de entorno de OAuth 2.0');
-  }
-
-  return new OAuth2Client(clientId, clientSecret, redirectUri);
-}
-
-// Función para guardar tokens en .env.local
-function persistTokensToEnv(accessToken: string, refreshToken: string) {
-  const envPath = path.resolve(process.cwd(), '.env.local');
-  let envContent = '';
-  if (fs.existsSync(envPath)) {
-    envContent = fs.readFileSync(envPath, 'utf8');
-  }
-  // Reemplazar o agregar las variables
-  envContent = envContent.replace(/GOOGLE_ACCESS_TOKEN=.*/g, '');
-  envContent = envContent.replace(/GOOGLE_REFRESH_TOKEN=.*/g, '');
-  envContent = envContent.trim() + `\nGOOGLE_ACCESS_TOKEN=${accessToken}\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`;
-  fs.writeFileSync(envPath, envContent, 'utf8');
-}
-
-// Función para obtener tokens de acceso reales
-async function getAccessToken(): Promise<string> {
-  const accessToken = process.env.GOOGLE_ACCESS_TOKEN;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  if (!accessToken && !refreshToken) {
-    throw new Error('No hay token de acceso ni refresh configurado. Primero debes autenticarte con Google OAuth 2.0.');
-  }
-  if (refreshToken) {
+// Función para obtener credenciales desde variables de entorno
+function getGoogleCredentials() {
+  // Opción 1: Usar credenciales Base64 (recomendado para Vercel)
+  if (process.env.GOOGLE_CREDENTIALS_BASE64) {
     try {
-      const client = getOAuth2Client();
-      client.setCredentials({ refresh_token: refreshToken });
-      const { credentials } = await client.refreshAccessToken();
-      // Actualizar tokens en memoria
-      process.env.GOOGLE_ACCESS_TOKEN = credentials.access_token!;
-      if (credentials.refresh_token) {
-        process.env.GOOGLE_REFRESH_TOKEN = credentials.refresh_token;
-      }
-      // Persistir en .env.local
-      persistTokensToEnv(credentials.access_token!, credentials.refresh_token || refreshToken);
-      return credentials.access_token!;
+      const credentials = JSON.parse(
+        Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString()
+      );
+      return credentials;
     } catch (error) {
-      console.error('Error refrescando token:', error);
-      // Si falla el refresh, intentar con el token actual
-      if (accessToken) return accessToken;
-      throw error;
+      console.error('Error parseando credenciales Base64:', error);
+      throw new Error('Error en formato de credenciales Base64');
     }
   }
-  return accessToken;
+
+  // Opción 2: Usar archivo credentials.json (desarrollo local)
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    return undefined; // Permitir que GoogleAuth use el archivo
+  }
+
+  throw new Error('No se encontraron credenciales de Google. Configura GOOGLE_CREDENTIALS_BASE64 o GOOGLE_APPLICATION_CREDENTIALS');
 }
 
-// Crear cliente de autenticación con OAuth 2.0
-async function getAuthClient() {
-  const accessToken = await getAccessToken();
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  return auth;
+// Crear cliente de autenticación con Service Account
+function getAuthClient() {
+  try {
+    const credentials = getGoogleCredentials();
+    
+    const auth = new google.auth.GoogleAuth({
+      credentials: credentials, // undefined si usa archivo local
+      keyFile: credentials ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      scopes: [
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    });
+
+    return auth;
+  } catch (error) {
+    console.error('Error configurando autenticación:', error);
+    throw error;
+  }
 }
 
 // Función para subir archivo a Google Drive
@@ -84,7 +53,7 @@ export async function uploadToDrive(
   folderId?: string
 ): Promise<{ fileId: string; webViewLink: string; downloadLink: string }> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     // Crear stream de lectura del buffer
@@ -125,13 +94,17 @@ export async function uploadToDrive(
     }
 
     // Hacer el archivo público para lectura
-    await drive.permissions.create({
-      fileId: fileId,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone',
-      },
-    });
+    try {
+      await drive.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+      });
+    } catch (permError) {
+      console.warn('No se pudo hacer público el archivo, pero se subió correctamente:', permError);
+    }
 
     return {
       fileId: fileId,
@@ -148,7 +121,7 @@ export async function uploadToDrive(
 // Función para crear carpeta en Google Drive
 export async function createFolder(folderName: string, parentFolderId?: string): Promise<string> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     const fileMetadata = {
@@ -178,7 +151,7 @@ export async function createFolder(folderName: string, parentFolderId?: string):
 // Función para obtener o crear carpeta del hotel
 export async function getHotelFolder(): Promise<string> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     // Buscar carpeta del hotel
@@ -203,7 +176,7 @@ export async function getHotelFolder(): Promise<string> {
 // Función para obtener o crear subcarpeta
 export async function getSubFolder(folderName: string, parentFolderId?: string): Promise<string> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     const parentId = parentFolderId || await getHotelFolder();
@@ -230,7 +203,7 @@ export async function getSubFolder(folderName: string, parentFolderId?: string):
 // Función para eliminar archivo de Google Drive
 export async function deleteFromDrive(fileId: string): Promise<void> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     await drive.files.delete({
@@ -246,7 +219,7 @@ export async function deleteFromDrive(fileId: string): Promise<void> {
 // Función para obtener información de un archivo
 export async function getFileInfo(fileId: string): Promise<{ name: string; size: string; webViewLink: string }> {
   try {
-    const auth = await getAuthClient();
+    const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
 
     const response = await drive.files.get({

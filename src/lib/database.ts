@@ -6,24 +6,50 @@ if (!connectionString) {
   throw new Error('DATABASE_URL no está definida en el entorno. Por favor, crea un archivo .env.local con la variable DATABASE_URL.');
 }
 
-// Configuración de SSL dinámica
+// Detectar el entorno
 const isProduction = process.env.NODE_ENV === 'production';
 const isLocalProxy = connectionString.includes('localhost');
+const isFlyDatabase = connectionString.includes('66.241.124.206') || connectionString.includes('flycast');
 
-const dbConfig = {
+// Configuración específica para cada entorno
+let dbConfig: any = {
   connectionString,
-  // Usar SSL solo en producción y cuando no sea conexión local via proxy
-  ssl: isProduction && !isLocalProxy ? {
-    rejectUnauthorized: false // Necesario para Fly.io
-  } : false,
-  // Configuraciones adicionales para producción
-  ...(isProduction && {
-    connectionTimeoutMillis: 30000,
+  // Configuración específica para Fly.io desde Vercel
+  ssl: false
+};
+
+if (isProduction && isFlyDatabase) {
+  // Configuración específica para Fly.io en producción
+  dbConfig = {
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+      sslmode: 'require'
+    },
+    connectionTimeoutMillis: 60000,
     idleTimeoutMillis: 30000,
-    max: 10, // Máximo 10 conexiones para Vercel
-    min: 1   // Mínimo 1 conexión
-  })
+    query_timeout: 30000,
+    statement_timeout: 30000,
+    max: 5,  // Reducir conexiones para evitar saturar Fly.io
+    min: 1,
+    allowExitOnIdle: true
+  };
+} else if (isLocalProxy) {
+  // Configuración para desarrollo local con proxy
+  dbConfig = {
+    connectionString,
+    ssl: false,
+    max: 10,
+    min: 1
+  };
 }
+
+console.log('Configuración DB:', {
+  isProduction,
+  isLocalProxy,
+  isFlyDatabase,
+  sslEnabled: !!dbConfig.ssl
+});
 
 // Pool de conexiones
 let pool: Pool | null = null
@@ -36,15 +62,29 @@ export function getDbPool(): Pool {
     pool.on('error', (err) => {
       console.error('Error inesperado en el pool de conexiones:', err);
     });
+    
+    // Evento de conexión exitosa
+    pool.on('connect', () => {
+      console.log('Nueva conexión establecida con la base de datos');
+    });
   }
   return pool
 }
 
-// Función para probar la conexión
+// Función para probar la conexión con timeout manual
 export async function testConnection(): Promise<{ success: boolean; message: string; data?: any }> {
+  let client;
   try {
-    const client = getDbPool()
-    const result = await client.query('SELECT NOW() as timestamp, version() as version')
+    const pool = getDbPool();
+    
+    // Usar timeout manual
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout de conexión (30s)')), 30000);
+    });
+    
+    const queryPromise = pool.query('SELECT NOW() as timestamp, version() as version');
+    
+    const result = await Promise.race([queryPromise, timeoutPromise]) as any;
     
     return {
       success: true,
