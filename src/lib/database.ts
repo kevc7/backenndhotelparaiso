@@ -6,9 +6,23 @@ if (!connectionString) {
   throw new Error('DATABASE_URL no está definida en el entorno. Por favor, crea un archivo .env.local con la variable DATABASE_URL.');
 }
 
+// Configuración de SSL dinámica
+const isProduction = process.env.NODE_ENV === 'production';
+const isLocalProxy = connectionString.includes('localhost');
+
 const dbConfig = {
   connectionString,
-  ssl: false // No necesario para conexión local a través del proxy
+  // Usar SSL solo en producción y cuando no sea conexión local via proxy
+  ssl: isProduction && !isLocalProxy ? {
+    rejectUnauthorized: false // Necesario para Fly.io
+  } : false,
+  // Configuraciones adicionales para producción
+  ...(isProduction && {
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+    max: 10, // Máximo 10 conexiones para Vercel
+    min: 1   // Mínimo 1 conexión
+  })
 }
 
 // Pool de conexiones
@@ -17,6 +31,11 @@ let pool: Pool | null = null
 export function getDbPool(): Pool {
   if (!pool) {
     pool = new Pool(dbConfig)
+    
+    // Manejar errores de conexión
+    pool.on('error', (err) => {
+      console.error('Error inesperado en el pool de conexiones:', err);
+    });
   }
   return pool
 }
