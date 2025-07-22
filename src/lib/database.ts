@@ -90,22 +90,43 @@ export async function testConnection(): Promise<{ success: boolean; message: str
   try {
     const pool = getDbPool();
     
+    console.log('🔗 Iniciando test de conexión...')
+    console.log('📊 Configuración detectada:', {
+      isProduction,
+      isLocalProxy,
+      isFlyDatabase,
+      isVercel,
+      sslEnabled: !!dbConfig.ssl,
+      connectionString: connectionString?.replace(/:[^:@]*@/, ':***@') // Ocultar password en logs
+    })
+    
     // Usar timeout manual
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Timeout de conexión (30s)')), 30000);
     });
     
+    console.log('⏱️ Ejecutando query con timeout de 30s...')
     const queryPromise = pool.query('SELECT NOW() as timestamp, version() as version');
     
     const result = await Promise.race([queryPromise, timeoutPromise]) as any;
     
+    console.log('✅ Conexión exitosa:', result.rows[0])
     return {
       success: true,
       message: 'Conexión exitosa a la base de datos',
       data: result.rows[0]
     }
   } catch (error) {
-    console.error('Error de conexión:', error)
+    console.error('❌ Error de conexión detallado:', {
+      message: error instanceof Error ? error.message : 'Error desconocido',
+      code: (error as any)?.code,
+      errno: (error as any)?.errno,
+      syscall: (error as any)?.syscall,
+      address: (error as any)?.address,
+      port: (error as any)?.port,
+      stack: error instanceof Error ? error.stack : 'No stack'
+    })
+    
     return {
       success: false,
       message: `Error: ${error instanceof Error ? error.message : 'Error desconocido'}`
