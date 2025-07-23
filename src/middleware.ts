@@ -88,14 +88,9 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
-  // Permitir acceso autenticado para crear reservas (POST)
+  // Permitir acceso público temporal para crear reservas (POST) - debugging CORS
   if (req.nextUrl.pathname === "/api/reservas" && req.method === "POST") {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) {
-      const errorResponse = NextResponse.json({ error: "No autenticado" }, { status: 401 });
-      setCorsHeaders(errorResponse, origin);
-      return errorResponse;
-    }
+    console.log('🔓 Acceso temporal a POST /api/reservas para debugging CORS');
     return response;
   }
 
