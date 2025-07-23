@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/database";
+import { generarFacturaPDF, generarNumeroFactura, calcularImpuestos } from '@/lib/pdf-generator';
+import { uploadToDrive, getSubFolder } from '@/lib/google-drive';
 
 // Función para generar factura directamente
 async function generarFacturaInterna(reservaId: number, staffId: number = 1, existingClient?: any) {
@@ -145,10 +147,78 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1, exi
 
       console.log('✅ Líneas de factura creadas');
 
+      // 🔄 GENERAR PDF Y SUBIR A GOOGLE DRIVE
+      console.log('📄 Generando PDF de la factura...');
+      try {
+        // Preparar datos para el PDF
+        const habitacionesPDF = habitaciones.map((hab: any) => ({
+          numero: hab.numero,
+          tipo: hab.tipo_nombre,
+          precioNoche: parseFloat(hab.precio_unitario),
+          dias: hab.noches,
+          subtotal: parseFloat(hab.subtotal)
+        }));
+
+        const facturaData = {
+          numeroFactura: numeroFactura,
+          fechaEmision: new Date().toISOString().split('T')[0],
+          cliente: {
+            nombre: reserva.nombre,
+            apellido: reserva.apellido,
+            email: reserva.email,
+            telefono: reserva.telefono,
+            documento: reserva.documento_identidad
+          },
+          reserva: {
+            codigo: reserva.codigo_reserva,
+            fechaCheckin: reserva.fecha_entrada,
+            fechaCheckout: reserva.fecha_salida,
+            total: total
+          },
+          habitaciones: habitacionesPDF,
+          subtotal: subtotal,
+          impuestos: impuestos,
+          total: total,
+          staffNombre: staffNombre
+        };
+
+        // Generar PDF
+        console.log('🔄 Generando PDF...');
+        const pdfBuffer = await generarFacturaPDF(facturaData);
+        console.log('✅ PDF generado, tamaño:', pdfBuffer.length, 'bytes');
+
+        // Subir PDF a Google Drive
+        const fileName = `factura_${numeroFactura}.pdf`;
+        console.log('☁️ Subiendo a Google Drive:', fileName);
+        const folderId = await getSubFolder('Facturas');
+        
+        const uploadResult = await uploadToDrive(
+          fileName,
+          pdfBuffer,
+          'application/pdf',
+          folderId
+        );
+
+        console.log('✅ PDF subido exitosamente a Drive:', uploadResult.webViewLink);
+
+        // Actualizar factura con URL del PDF
+        await client.query(`
+          UPDATE facturas_cabecera 
+          SET url_pdf = $1 
+          WHERE id = $2
+        `, [uploadResult.webViewLink, facturaResult.rows[0].id]);
+
+        console.log('✅ URL de PDF actualizada en BD');
+
+      } catch (pdfError) {
+        console.error('❌ Error generando/subiendo PDF:', pdfError);
+        // No fallar la factura por error de PDF, pero loguearlo
+      }
+
       if (!existingClient) {
         await client.query('COMMIT');
       }
-      console.log('🎉 Factura generada exitosamente (sin PDF por ahora)');
+      console.log('🎉 Factura completa generada exitosamente con PDF en Drive');
 
       return {
         success: true,
