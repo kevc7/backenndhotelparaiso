@@ -20,6 +20,7 @@
     "google-auth-library": "^10.1.0",
     "googleapis": "^153.0.0",
     "jsonwebtoken": "^9.0.2",
+    "jspdf": "^2.5.2",
     "multer": "^2.0.2",
     "next": "15.3.4",
     "next-auth": "^4.24.11",
