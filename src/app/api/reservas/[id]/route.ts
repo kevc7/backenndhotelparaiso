@@ -2,16 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/database";
 
 // Función para generar factura directamente
-async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
+async function generarFacturaInterna(reservaId: number, staffId: number = 1, existingClient?: any) {
   console.log('🧾 INICIANDO generación de factura interna...');
   console.log('📋 Parámetros:', { reservaId, staffId });
   
   try {
     const pool = getDbPool();
-    const client = await pool.connect();
+    const client = existingClient || await pool.connect();
 
     try {
-      await client.query('BEGIN');
+      if (!existingClient) {
+        await client.query('BEGIN');
+      }
       console.log('🔄 Transacción iniciada para factura');
 
       // Verificar que el staff existe
@@ -23,7 +25,7 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
       const staffNombre = staffCheck.rows[0].nombre + ' ' + staffCheck.rows[0].apellido;
       console.log('✅ Staff encontrado:', staffNombre);
 
-      // Verificar que la reserva existe y está confirmada
+      // Verificar que la reserva existe
       console.log('🏨 Verificando reserva...');
       const reservaQuery = `
         SELECT 
@@ -79,7 +81,7 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
       console.log('✅ Habitaciones encontradas:', habitaciones.length);
 
       // Calcular totales
-      const subtotal = habitaciones.reduce((sum, hab) => sum + parseFloat(hab.subtotal), 0);
+      const subtotal = habitaciones.reduce((sum: number, hab: any) => sum + parseFloat(hab.subtotal), 0);
       const impuestos = subtotal * 0.19; // 19% IVA
       const total = subtotal + impuestos;
 
@@ -143,7 +145,9 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
 
       console.log('✅ Líneas de factura creadas');
 
-      await client.query('COMMIT');
+      if (!existingClient) {
+        await client.query('COMMIT');
+      }
       console.log('🎉 Factura generada exitosamente (sin PDF por ahora)');
 
       return {
@@ -153,10 +157,14 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
       };
 
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!existingClient) {
+        await client.query('ROLLBACK');
+      }
       throw error;
     } finally {
-      client.release();
+      if (!existingClient) {
+        client.release();
+      }
     }
 
   } catch (error) {
@@ -352,7 +360,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
           // ✅ GENERAR FACTURA AUTOMÁTICAMENTE
           console.log('🧾 Iniciando generación automática de factura para reserva:', reservaId);
-          const facturaResult = await generarFacturaInterna(parseInt(reservaId), 1);
+          const facturaResult = await generarFacturaInterna(parseInt(reservaId), 1, client);
           
           if (facturaResult.success) {
             console.log('✅ Factura generada exitosamente:', facturaResult.data?.codigo_factura);
