@@ -1,46 +1,24 @@
 import { google } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
 import { Readable } from 'stream';
 
-// Función para obtener credenciales desde variables de entorno
-function getGoogleCredentials() {
-  // Opción 1: Usar credenciales Base64 (recomendado para Vercel)
-  if (process.env.GOOGLE_CREDENTIALS_BASE64) {
-    try {
-      const credentials = JSON.parse(
-        Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString()
-      );
-      return credentials;
-    } catch (error) {
-      console.error('Error parseando credenciales Base64:', error);
-      throw new Error('Error en formato de credenciales Base64');
-    }
-  }
-
-  // Opción 2: Usar archivo credentials.json (desarrollo local)
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return undefined; // Permitir que GoogleAuth use el archivo
-  }
-
-  throw new Error('No se encontraron credenciales de Google. Configura GOOGLE_CREDENTIALS_BASE64 o GOOGLE_APPLICATION_CREDENTIALS');
-}
-
-// Crear cliente de autenticación con Service Account
+// Crear cliente de autenticación con OAuth 2.0
 function getAuthClient() {
   try {
-    const credentials = getGoogleCredentials();
-    
-    const auth = new google.auth.GoogleAuth({
-      credentials: credentials, // undefined si usa archivo local
-      keyFile: credentials ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
-      scopes: [
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/drive',
-      ],
-    });
+    const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-    return auth;
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error('Faltan credenciales OAuth: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET o GOOGLE_REFRESH_TOKEN');
+    }
+
+    const oauth2Client = new OAuth2Client(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+    return oauth2Client;
   } catch (error) {
-    console.error('Error configurando autenticación:', error);
+    console.error('Error configurando autenticación OAuth:', error);
     throw error;
   }
 }
@@ -237,4 +215,4 @@ export async function getFileInfo(fileId: string): Promise<{ name: string; size:
     console.error('Error obteniendo información del archivo:', error);
     throw new Error(`Error al obtener información del archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`);
   }
-} 
+}
