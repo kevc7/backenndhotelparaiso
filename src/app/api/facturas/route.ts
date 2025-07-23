@@ -68,8 +68,12 @@ export async function GET(request: NextRequest) {
 
 // POST - Generar nueva factura
 export async function POST(request: NextRequest) {
+  console.log('🏁 INICIO - Generación de factura');
+  
   // Permitir llamadas internas sin autenticación
   const isInternal = request.headers.get('x-internal-call') === 'true';
+  console.log('🔒 Llamada interna:', isInternal);
+  
   if (!isInternal) {
     // Aquí iría la lógica de autenticación normal, por ejemplo:
     // const session = await getServerSession(authOptions);
@@ -80,8 +84,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { reserva_id, staff_id } = body;
+    console.log('📋 Datos recibidos:', { reserva_id, staff_id });
 
     if (!reserva_id || !staff_id) {
+      console.log('❌ Faltan datos requeridos');
       return NextResponse.json({
         success: false,
         message: 'reserva_id y staff_id son requeridos'
@@ -90,19 +96,24 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
     const client = await pool.connect();
+    console.log('🔌 Conexión a base de datos establecida');
 
     try {
       await client.query('BEGIN');
+      console.log('🔄 Transacción iniciada');
 
       // Verificar que el staff existe
+      console.log('👤 Verificando staff con ID:', staff_id);
       const staffCheck = await client.query('SELECT id, nombre, apellido FROM usuarios WHERE id = $1', [staff_id]);
       if (staffCheck.rows.length === 0) {
+        console.log('❌ Staff no encontrado');
         return NextResponse.json({
           success: false,
           message: 'El usuario staff no existe'
         }, { status: 404 });
       }
       const staffNombre = staffCheck.rows[0].nombre + ' ' + staffCheck.rows[0].apellido;
+      console.log('✅ Staff encontrado:', staffNombre);
 
       // Verificar que la reserva existe y está confirmada
       const reservaQuery = `
@@ -116,6 +127,7 @@ export async function POST(request: NextRequest) {
 
       const reservaResult = await client.query(reservaQuery, [reserva_id]);
       if (reservaResult.rows.length === 0) {
+        console.log('❌ Reserva no encontrada o no está confirmada');
         return NextResponse.json({
           success: false,
           message: 'Reserva no encontrada o no está confirmada'
@@ -123,6 +135,11 @@ export async function POST(request: NextRequest) {
       }
 
       const reserva = reservaResult.rows[0];
+      console.log('✅ Reserva encontrada:', {
+        codigo: reserva.codigo_reserva,
+        fechaCheckin: reserva.fecha_entrada,
+        fechaCheckout: reserva.fecha_salida
+      });
 
       // Verificar que no existe factura para esta reserva
       const facturaExistente = await client.query(
@@ -131,6 +148,7 @@ export async function POST(request: NextRequest) {
       );
 
       if (facturaExistente.rows.length > 0) {
+        console.log('❌ Ya existe una factura para esta reserva');
         return NextResponse.json({
           success: false,
           message: 'Ya existe una factura para esta reserva'
@@ -154,6 +172,7 @@ export async function POST(request: NextRequest) {
 
       const habitacionesResult = await client.query(habitacionesQuery, [reserva_id]);
       const habitaciones = habitacionesResult.rows;
+      console.log('✅ Habitaciones encontradas:', habitaciones.length);
 
       // Preparar datos para el PDF
       const habitacionesPDF = habitaciones.map(hab => ({
@@ -192,18 +211,33 @@ export async function POST(request: NextRequest) {
       };
 
       // Generar PDF
+      console.log('🔄 Generando PDF con datos:', {
+        numeroFactura: facturaData.numeroFactura,
+        cliente: facturaData.cliente.nombre,
+        habitaciones: facturaData.habitaciones.length,
+        total: facturaData.total
+      });
       const pdfBuffer = await generarFacturaPDF(facturaData);
+      console.log('✅ PDF generado exitosamente, tamaño:', pdfBuffer.length, 'bytes');
 
       // Subir PDF a Google Drive
       const fileName = `factura_${facturaData.numeroFactura}.pdf`;
+      console.log('📁 Obteniendo carpeta "Facturas" en Drive...');
       const folderId = await getSubFolder('Facturas');
+      console.log('✅ Carpeta obtenida, ID:', folderId);
       
+      console.log('☁️ Subiendo PDF a Google Drive...');
       const uploadResult = await uploadToDrive(
         fileName,
         pdfBuffer,
         'application/pdf',
         folderId
       );
+      console.log('✅ PDF subido exitosamente a Drive:', {
+        fileName: fileName,
+        webViewLink: uploadResult.webViewLink,
+        fileId: uploadResult.fileId
+      });
 
       // Crear factura en la base de datos
       const facturaResult = await client.query(`
@@ -227,6 +261,7 @@ export async function POST(request: NextRequest) {
         total,
         staff_id
       ]);
+      console.log('✅ Factura creada en la base de datos:', facturaResult.rows[0].id);
 
       // Crear líneas de factura
       for (const habitacion of habitacionesPDF) {
@@ -246,8 +281,10 @@ export async function POST(request: NextRequest) {
           habitacion.subtotal
         ]);
       }
+      console.log('✅ Líneas de factura creadas');
 
       await client.query('COMMIT');
+      console.log('✅ Transacción completada con éxito');
 
       return NextResponse.json({
         success: true,
@@ -261,9 +298,11 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
       await client.query('ROLLBACK');
+      console.error('Error en la transacción:', error);
       throw error;
     } finally {
       client.release();
+      console.log('🔌 Conexión a base de datos liberada');
     }
 
   } catch (error) {

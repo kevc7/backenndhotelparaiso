@@ -30,9 +30,19 @@ export async function uploadToDrive(
   mimeType: string,
   folderId?: string
 ): Promise<{ fileId: string; webViewLink: string; downloadLink: string }> {
+  console.log('☁️ INICIO - Subida a Google Drive');
+  console.log('📁 Datos del archivo:', {
+    fileName,
+    mimeType,
+    size: fileBuffer.length,
+    folderId
+  });
+
   try {
+    console.log('🔐 Obteniendo autenticación OAuth...');
     const auth = getAuthClient();
     const drive = google.drive({ version: 'v3', auth });
+    console.log('✅ Autenticación OAuth exitosa');
 
     // Crear stream de lectura del buffer
     const stream = new Readable();
@@ -45,6 +55,9 @@ export async function uploadToDrive(
       parents: folderId ? [folderId] : undefined,
     };
 
+    console.log('🔄 Configurando metadatos del archivo...');
+    console.log('📋 Metadatos:', fileMetadata);
+
     // Configurar el archivo
     const media = {
       mimeType: mimeType,
@@ -52,6 +65,7 @@ export async function uploadToDrive(
     };
 
     // Subir archivo con timeout
+    console.log('⬆️ Iniciando subida a Google Drive...');
     const response = await Promise.race([
       drive.files.create({
         requestBody: fileMetadata,

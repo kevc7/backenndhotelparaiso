@@ -47,6 +47,14 @@ function getLogoAsBase64(): string {
 }
 
 export async function generarFacturaPDF(data: FacturaData): Promise<Buffer> {
+  console.log('🔄 INICIANDO generación de PDF...');
+  console.log('📋 Datos recibidos:', {
+    numeroFactura: data.numeroFactura,
+    cliente: data.cliente?.nombre,
+    habitaciones: data.habitaciones?.length,
+    total: data.total
+  });
+
   // Usar el link directo de la imagen subida
   const logoUrl = 'https://i.ibb.co/0jQw2nC/logo.png'; // Link directo de la imagen subida a ImgBB
   
@@ -135,18 +143,35 @@ export async function generarFacturaPDF(data: FacturaData): Promise<Buffer> {
   </html>
   `;
 
-  const browser = await puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-    ignoreHTTPSErrors: true,
-  });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: 40, bottom: 40, left: 40, right: 40 } });
-  await browser.close();
-  return Buffer.from(pdfBuffer);
+  console.log('🚀 Iniciando Puppeteer...');
+  try {
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
+    });
+    console.log('✅ Puppeteer iniciado correctamente');
+
+    const page = await browser.newPage();
+    console.log('📄 Página creada, cargando HTML...');
+    
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    console.log('✅ HTML cargado correctamente');
+    
+    console.log('🔄 Generando PDF...');
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: 40, bottom: 40, left: 40, right: 40 } });
+    console.log('✅ PDF generado, tamaño:', pdfBuffer.length, 'bytes');
+    
+    await browser.close();
+    console.log('🎉 PDF completado exitosamente');
+    
+    return Buffer.from(pdfBuffer);
+  } catch (error) {
+    console.error('❌ ERROR en generación de PDF:', error);
+    throw error;
+  }
 }
 
 // Las funciones de número de factura e impuestos siguen igual
