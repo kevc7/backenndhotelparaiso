@@ -94,6 +94,12 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // Permitir acceso público temporal para actualizar reservas (PUT) - debugging CORS
+  if (req.nextUrl.pathname.startsWith("/api/reservas/") && req.method === "PUT") {
+    console.log('🔓 Acceso temporal a PUT /api/reservas para staff debugging CORS');
+    return response;
+  }
+
   // Permitir acceso público temporal a comprobantes (debugging CORS)
   if (req.nextUrl.pathname === "/api/comprobantes" && (req.method === "POST" || req.method === "GET")) {
     console.log('🔓 Acceso temporal a comprobantes para debugging CORS');
