@@ -1,3 +1,4 @@
+import PDFDocument from 'pdfkit';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import path from 'path';
@@ -55,12 +56,13 @@ export async function generarFacturaPDF(data: FacturaData): Promise<Buffer> {
     total: data.total
   });
 
-  // Primero intentar con Puppeteer + Chromium
+  // Usar PDFKit como opción principal (más confiable en Vercel)
   try {
-    return await generarPDFConPuppeteer(data);
-  } catch (puppeteerError) {
-    console.error('❌ Puppeteer falló, usando fallback PDFKit:', puppeteerError);
+    console.log('🚀 Usando PDFKit para máxima compatibilidad...');
     return await generarPDFConPDFKit(data);
+  } catch (pdfKitError) {
+    console.error('❌ PDFKit falló, intentando Puppeteer:', pdfKitError);
+    return await generarPDFConPuppeteer(data);
   }
 }
 
@@ -172,7 +174,6 @@ async function generarPDFConPuppeteer(data: FacturaData): Promise<Buffer> {
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-      ignoreHTTPSErrors: true,
     });
     console.log('✅ Puppeteer iniciado correctamente');
 
@@ -196,77 +197,103 @@ async function generarPDFConPuppeteer(data: FacturaData): Promise<Buffer> {
   }
 }
 
-// Función con PDFKit (fallback)
+// Función con PDFKit (fallback confiable)
 async function generarPDFConPDFKit(data: FacturaData): Promise<Buffer> {
   console.log('🚀 Intentando con PDFKit (fallback)...');
-  const logoUrl = 'https://i.ibb.co/0jQw2nC/logo.png'; // Link directo de la imagen subida a ImgBB
 
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'portrait',
-    margin: 40,
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => {
+        const pdfBuffer = Buffer.concat(chunks);
+        console.log('✅ PDF generado con PDFKit, tamaño:', pdfBuffer.length, 'bytes');
+        resolve(pdfBuffer);
+      });
+
+      // Header - Hotel Info
+      doc.fontSize(20).fillColor('#2E7D32').text('HOTEL PARAÍSO VERDE', 50, 50);
+      doc.fontSize(12).fillColor('#666').text('Machala, Ecuador', 50, 75);
+      doc.text('Tel: +593 4 123 4567 | Email: info@hotelparaiso.com', 50, 90);
+
+      // Factura Info
+      doc.fontSize(16).fillColor('#2E7D32').text('FACTURA', 400, 50);
+      doc.fontSize(12).fillColor('#000')
+         .text(`N°: ${data.numeroFactura}`, 400, 75)
+         .text(`Fecha: ${data.fechaEmision}`, 400, 90);
+
+      // Cliente Info
+      doc.fontSize(14).fillColor('#2E7D32').text('Datos del Cliente', 50, 130);
+      doc.fontSize(12).fillColor('#000')
+         .text(`Nombre: ${data.cliente.nombre} ${data.cliente.apellido}`, 50, 150)
+         .text(`Email: ${data.cliente.email}`, 50, 165)
+         .text(`Teléfono: ${data.cliente.telefono}`, 50, 180)
+         .text(`Documento: ${data.cliente.documento}`, 50, 195);
+
+      // Reserva Info
+      doc.fontSize(14).fillColor('#2E7D32').text('Detalles de la Reserva', 50, 220);
+      doc.fontSize(12).fillColor('#000')
+         .text(`Código: ${data.reserva.codigo}`, 50, 240)
+         .text(`Check-in: ${data.reserva.fechaCheckin}`, 50, 255)
+         .text(`Check-out: ${data.reserva.fechaCheckout}`, 50, 270);
+
+      // Tabla de habitaciones
+      let yPos = 300;
+      doc.fontSize(14).fillColor('#2E7D32').text('Habitaciones', 50, yPos);
+      yPos += 25;
+
+      // Headers de tabla
+      doc.fontSize(12).fillColor('#fff');
+      doc.rect(50, yPos, 500, 20).fill('#2E7D32');
+      doc.text('Habitación', 60, yPos + 5);
+      doc.text('Tipo', 160, yPos + 5);
+      doc.text('Días', 260, yPos + 5);
+      doc.text('Precio/Noche', 320, yPos + 5);
+      doc.text('Subtotal', 450, yPos + 5);
+      yPos += 25;
+
+      // Filas de habitaciones
+      doc.fillColor('#000');
+      data.habitaciones.forEach((hab, index) => {
+        const bgColor = index % 2 === 0 ? '#f5f5f5' : '#fff';
+        doc.rect(50, yPos, 500, 20).fill(bgColor);
+        doc.fillColor('#000')
+           .text(hab.numero, 60, yPos + 5)
+           .text(hab.tipo, 160, yPos + 5)
+           .text(hab.dias.toString(), 260, yPos + 5)
+           .text(`$${hab.precioNoche.toFixed(2)}`, 320, yPos + 5)
+           .text(`$${hab.subtotal.toFixed(2)}`, 450, yPos + 5);
+        yPos += 25;
+      });
+
+      // Totales
+      yPos += 20;
+      doc.fontSize(12)
+         .text(`Subtotal: $${data.subtotal.toFixed(2)}`, 350, yPos)
+         .text(`Impuestos (19%): $${data.impuestos.toFixed(2)}`, 350, yPos + 15)
+         .fontSize(14).fillColor('#2E7D32')
+         .text(`TOTAL: $${data.total.toFixed(2)}`, 350, yPos + 35);
+
+      // Staff info
+      if (data.staffNombre) {
+        doc.fontSize(10).fillColor('#666')
+           .text(`Factura generada por: ${data.staffNombre}`, 350, yPos + 70);
+      }
+
+      // Footer
+      doc.fontSize(10).fillColor('#666')
+         .text('Gracias por elegir Hotel Paraíso Verde', 50, yPos + 100)
+         .text('Su satisfacción es nuestra prioridad', 50, yPos + 115);
+
+      doc.end();
+
+    } catch (error) {
+      console.error('❌ Error en PDFKit:', error);
+      reject(error);
+    }
   });
-
-  const logo = await fetch(logoUrl).then(res => res.arrayBuffer());
-  doc.image(logo, {
-    fit: [120, 50],
-    align: 'center',
-    valign: 'center',
-  });
-
-  doc.font('Helvetica-Bold').fontSize(24).text('HOTEL PARAÍSO VERDE', { align: 'center' });
-  doc.font('Helvetica').fontSize(12).text('Machala, Ecuador', { align: 'center' });
-  doc.font('Helvetica').fontSize(10).text('Tel: +593 4 123 4567 | Email: info@hotelparaiso.com', { align: 'center' });
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('FACTURA', { align: 'center' });
-  doc.font('Helvetica').text(`N°: ${data.numeroFactura} | Fecha: ${data.fechaEmision}`, { align: 'center' });
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('Datos del Cliente', { align: 'left' });
-  doc.font('Helvetica').text(`Nombre: ${data.cliente.nombre} ${data.cliente.apellido}`);
-  doc.font('Helvetica').text(`Email: ${data.cliente.email}`);
-  doc.font('Helvetica').text(`Teléfono: ${data.cliente.telefono}`);
-  doc.font('Helvetica').text(`Documento: ${data.cliente.documento}`);
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('Detalles de la Reserva', { align: 'left' });
-  doc.font('Helvetica').text(`Código: ${data.reserva.codigo}`);
-  doc.font('Helvetica').text(`Check-in: ${data.reserva.fechaCheckin} | Check-out: ${data.reserva.fechaCheckout}`);
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('Habitaciones', { align: 'left' });
-  doc.font('Helvetica').text('Habitación | Tipo | Precio/Noche | Días | Subtotal');
-  data.habitaciones.forEach(h => {
-    doc.font('Helvetica').text(`${h.numero} | ${h.tipo} | $${h.precioNoche.toFixed(2)} | ${h.dias} | $${h.subtotal.toFixed(2)}`);
-  });
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('Totales', { align: 'right' });
-  doc.font('Helvetica').text(`Subtotal: $${data.subtotal.toFixed(2)}`);
-  doc.font('Helvetica').text(`Impuestos (19%): $${data.impuestos.toFixed(2)}`);
-  doc.font('Helvetica-Bold').text(`TOTAL: $${data.total.toFixed(2)}`, { align: 'right' });
-
-  doc.moveDown();
-
-  doc.font('Helvetica-Bold').text('Factura generada por:', { align: 'right' });
-  doc.font('Helvetica').text(`${data.staffNombre || ''}`);
-
-  doc.moveDown();
-
-  doc.font('Helvetica').text('Gracias por elegir Hotel Paraíso Verde', { align: 'center' });
-  doc.font('Helvetica').text('Su satisfacción es nuestra prioridad', { align: 'center' });
-
-  const buffers = [];
-  for (let i = 0; i < doc.bufferedPageRange.pageCount; i++) {
-    buffers.push(doc.bufferedPageRange.getPage(i).stream.buffer);
-  }
-  return Buffer.concat(buffers);
 }
 
 // Las funciones de número de factura e impuestos siguen igual
