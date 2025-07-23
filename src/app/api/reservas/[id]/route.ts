@@ -370,6 +370,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
 
       await client.query('COMMIT');
+      console.log('✅ Reserva actualizada y transacción confirmada');
 
       return NextResponse.json({
         success: true,
