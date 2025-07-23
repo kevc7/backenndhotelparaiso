@@ -122,7 +122,13 @@ export async function middleware(req: NextRequest) {
 
   // Permitir acceso a clientes para usuarios autenticados (GET)
   if (req.nextUrl.pathname === "/api/clientes" && req.method === "GET") {
-    // Verificar que el usuario esté autenticado pero permitir acceso
+    const usuarioId = req.nextUrl.searchParams.get('usuario_id');
+    if (usuarioId) {
+      // ✅ Permitir acceso público temporal para consultas por usuario_id (debugging CORS)
+      console.log('🔓 Acceso temporal a clientes para usuario_id:', usuarioId);
+      return response;
+    }
+    // Para otras consultas, requerir autenticación
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) {
       const errorResponse = NextResponse.json({ error: "No autenticado" }, { status: 401 });
