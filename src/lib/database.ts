@@ -36,7 +36,7 @@ if (isSupabase) {
   };
 } else if (isFlyDatabase) {
   if (isVercel || connectionString.includes('.fly.dev')) {
-    // Configuración para conexiones externas desde Vercel a Fly.io
+    // Configuración optimizada para conexiones externas desde Vercel a Fly.io
     dbConfig = {
       connectionString,
       ssl: {
@@ -44,13 +44,16 @@ if (isSupabase) {
         require: true,
         ca: undefined  // No verificar certificado CA específico
       },
-      connectionTimeoutMillis: 60000,
-      idleTimeoutMillis: 30000,
-      query_timeout: 60000,
-      statement_timeout: 60000,
+      connectionTimeoutMillis: 20000,  // ✅ Reducir timeout a 20s
+      idleTimeoutMillis: 10000,        // ✅ Liberar conexiones más rápido
+      query_timeout: 20000,            // ✅ Reducir query timeout
+      statement_timeout: 20000,        // ✅ Reducir statement timeout
       max: 1,  // Solo 1 conexión para evitar problemas
       min: 0,  // Sin conexiones mínimas para serverless
-      allowExitOnIdle: true
+      allowExitOnIdle: true,
+      // ✅ Agregar keepalive para mantener conexión activa
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 0
     };
   } else {
     // Configuración para conexiones internas en Fly.io
