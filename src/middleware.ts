@@ -100,6 +100,43 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // ========== ACCESO TEMPORAL PARA PÁGINAS DE GESTIÓN ==========
+  
+  // Permitir acceso temporal a CRUD de habitaciones (debugging CORS)
+  if (req.nextUrl.pathname === "/api/habitaciones" && (req.method === "POST" || req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD habitaciones para debugging CORS');
+    return response;
+  }
+  
+  if (req.nextUrl.pathname.startsWith("/api/habitaciones/") && (req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD habitaciones/[id] para debugging CORS');
+    return response;
+  }
+
+  // Permitir acceso temporal a CRUD de usuarios (debugging CORS)
+  if (req.nextUrl.pathname === "/api/usuarios" && (req.method === "POST" || req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD usuarios para debugging CORS');
+    return response;
+  }
+  
+  if (req.nextUrl.pathname.startsWith("/api/usuarios/") && (req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD usuarios/[id] para debugging CORS');
+    return response;
+  }
+
+  // Permitir acceso temporal a CRUD de tipos de habitación (debugging CORS)
+  if (req.nextUrl.pathname === "/api/tipos-habitacion" && (req.method === "POST" || req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD tipos-habitacion para debugging CORS');
+    return response;
+  }
+  
+  if (req.nextUrl.pathname.startsWith("/api/tipos-habitacion/") && (req.method === "PUT" || req.method === "DELETE")) {
+    console.log('🔓 Acceso temporal a CRUD tipos-habitacion/[id] para debugging CORS');
+    return response;
+  }
+
+  // ========== FIN ACCESO TEMPORAL ==========
+
   // Permitir acceso público temporal a comprobantes (debugging CORS)
   if (req.nextUrl.pathname === "/api/comprobantes" && (req.method === "POST" || req.method === "GET")) {
     console.log('🔓 Acceso temporal a comprobantes para debugging CORS');

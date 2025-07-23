@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN estado = 'cancelada' THEN 1 END) as reservas_canceladas,
         COALESCE(SUM(precio_total), 0) as ingresos_estimados
       FROM reservas 
-      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2
+      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2 || ' 23:59:59'
     `;
 
     const reservasResult = await pool.query(reservasQuery, [fechaDesde, fechaHasta]);
@@ -51,7 +51,8 @@ export async function GET(request: NextRequest) {
         COUNT(*) as total_habitaciones,
         COUNT(CASE WHEN estado = 'libre' THEN 1 END) as habitaciones_disponibles,
         COUNT(CASE WHEN estado = 'ocupada' THEN 1 END) as habitaciones_ocupadas,
-        COUNT(CASE WHEN estado = 'mantenimiento' THEN 1 END) as habitaciones_mantenimiento
+        COUNT(CASE WHEN estado = 'mantenimiento' THEN 1 END) as habitaciones_mantenimiento,
+        COUNT(CASE WHEN estado = 'separada' THEN 1 END) as habitaciones_separadas
       FROM habitaciones
     `;
 
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN estado = 'anulada' THEN 1 END) as facturas_anuladas,
         COALESCE(SUM(CASE WHEN estado = 'activa' THEN total ELSE 0 END), 0) as ingresos_facturados
       FROM facturas_cabecera 
-      WHERE fecha_emision >= $1 AND fecha_emision <= $2
+      WHERE fecha_emision >= $1 AND fecha_emision <= $2 || ' 23:59:59'
     `;
 
     const facturasResult = await pool.query(facturasQuery, [fechaDesde, fechaHasta]);
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
         COUNT(DISTINCT cliente_id) as clientes_unicos,
         COUNT(*) as total_reservas_clientes
       FROM reservas 
-      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2
+      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2 || ' 23:59:59'
     `;
 
     const clientesResult = await pool.query(clientesQuery, [fechaDesde, fechaHasta]);
