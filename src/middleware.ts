@@ -7,6 +7,7 @@ function setCorsHeaders(response: NextResponse, origin: string | null) {
     'http://localhost:3000',
     'http://localhost:3001',
     'https://hotel-paraiso-frontend.vercel.app',
+    'https://frontendhotelparaiso.vercel.app', // ✅ Agregar el dominio correcto
     'https://hotel-paraiso-backend.vercel.app'
   ];
   

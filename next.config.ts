@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
           { 
             key: "Access-Control-Allow-Origin", 
             value: process.env.NODE_ENV === 'production' 
-              ? "https://hotel-paraiso-frontend.vercel.app" 
+              ? "https://frontendhotelparaiso.vercel.app" // ✅ Usar dominio correcto
               : "http://localhost:3001" 
           },
           { key: "Access-Control-Allow-Methods", value: "GET,DELETE,PATCH,POST,PUT,OPTIONS" },
