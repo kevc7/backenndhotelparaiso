@@ -186,8 +186,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           try {
             console.log('🧾 Generando factura automáticamente para reserva:', reservaId);
             
+            // Determinar la URL base correcta
+            const baseUrl = process.env.VERCEL_URL 
+              ? `https://${process.env.VERCEL_URL}` 
+              : process.env.NEXTAUTH_URL || 'http://localhost:3000';
+            
             // Llamada interna al endpoint de facturas
-            const facturaResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/facturas`, {
+            const facturaResponse = await fetch(`${baseUrl}/api/facturas`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

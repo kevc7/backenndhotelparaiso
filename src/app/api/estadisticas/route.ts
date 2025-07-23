@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN estado = 'cancelada' THEN 1 END) as reservas_canceladas,
         COALESCE(SUM(precio_total), 0) as ingresos_estimados
       FROM reservas 
-      WHERE fecha_creacion >= $1::date AND fecha_creacion < ($2::date + INTERVAL '1 day')
+      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2
     `;
 
     const reservasResult = await pool.query(reservasQuery, [fechaDesde, fechaHasta]);
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN estado = 'anulada' THEN 1 END) as facturas_anuladas,
         COALESCE(SUM(CASE WHEN estado = 'activa' THEN total ELSE 0 END), 0) as ingresos_facturados
       FROM facturas_cabecera 
-      WHERE fecha_emision >= $1 AND fecha_emision <= $2 || ' 23:59:59'
+      WHERE fecha_emision >= $1 AND fecha_emision <= $2
     `;
 
     const facturasResult = await pool.query(facturasQuery, [fechaDesde, fechaHasta]);
