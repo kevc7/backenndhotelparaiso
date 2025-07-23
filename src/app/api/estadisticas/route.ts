@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN estado = 'cancelada' THEN 1 END) as reservas_canceladas,
         COALESCE(SUM(precio_total), 0) as ingresos_estimados
       FROM reservas 
-      WHERE fecha_creacion >= $1 AND fecha_creacion <= $2 || ' 23:59:59'
+      WHERE fecha_creacion >= $1::date AND fecha_creacion < ($2::date + INTERVAL '1 day')
     `;
 
     const reservasResult = await pool.query(reservasQuery, [fechaDesde, fechaHasta]);

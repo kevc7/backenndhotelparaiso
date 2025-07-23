@@ -143,6 +143,12 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // Permitir acceso público a facturas (debugging CORS)
+  if (req.nextUrl.pathname.startsWith("/api/facturas") && (req.method === "GET" || req.method === "POST")) {
+    console.log('🔓 Acceso temporal a facturas para debugging CORS');
+    return response;
+  }
+
   // Permitir acceso público a seed-completo
   if (req.nextUrl.pathname === "/api/seed-completo" && req.method === "POST") {
     return response;

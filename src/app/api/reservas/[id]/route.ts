@@ -181,6 +181,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               WHERE reserva_id = $1
             )
           `, [reservaId]);
+
+          // ✅ GENERAR FACTURA AUTOMÁTICAMENTE
+          try {
+            console.log('🧾 Generando factura automáticamente para reserva:', reservaId);
+            
+            // Llamada interna al endpoint de facturas
+            const facturaResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/facturas`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-internal-call': 'true'
+              },
+              body: JSON.stringify({
+                reserva_id: reservaId,
+                staff_id: 1 // ID del staff por defecto, puedes cambiarlo según necesites
+              })
+            });
+
+            if (facturaResponse.ok) {
+              const facturaData = await facturaResponse.json();
+              console.log('✅ Factura generada exitosamente:', facturaData.data?.codigo_factura);
+            } else {
+              console.error('❌ Error generando factura:', await facturaResponse.text());
+            }
+          } catch (facturaError) {
+            console.error('❌ Error en llamada de factura:', facturaError);
+            // No fallar la confirmación de reserva por error de factura
+          }
+
         } else if (estado === 'cancelada') {
           // Liberar habitaciones
           await client.query(`
