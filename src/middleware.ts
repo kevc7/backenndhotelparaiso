@@ -94,14 +94,9 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
-  // Permitir acceso autenticado para comprobantes
+  // Permitir acceso público temporal a comprobantes (debugging CORS)
   if (req.nextUrl.pathname === "/api/comprobantes" && (req.method === "POST" || req.method === "GET")) {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) {
-      const errorResponse = NextResponse.json({ error: "No autenticado" }, { status: 401 });
-      setCorsHeaders(errorResponse, origin);
-      return errorResponse;
-    }
+    console.log('🔓 Acceso temporal a comprobantes para debugging CORS');
     return response;
   }
 
