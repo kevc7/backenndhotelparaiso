@@ -31,15 +31,20 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1) {
           c.nombre, c.apellido, c.email, c.telefono, c.documento_identidad
         FROM reservas r
         LEFT JOIN clientes c ON r.cliente_id = c.id
-        WHERE r.id = $1 AND r.estado = 'confirmada'
+        WHERE r.id = $1
       `;
 
       const reservaResult = await client.query(reservaQuery, [reservaId]);
       if (reservaResult.rows.length === 0) {
-        throw new Error('Reserva no encontrada o no está confirmada');
+        throw new Error('Reserva no encontrada');
       }
       const reserva = reservaResult.rows[0];
-      console.log('✅ Reserva encontrada:', reserva.codigo_reserva);
+      console.log('✅ Reserva encontrada:', reserva.codigo_reserva, 'Estado:', reserva.estado);
+
+      // Verificar que la reserva está confirmada
+      if (reserva.estado !== 'confirmada') {
+        throw new Error(`Reserva en estado '${reserva.estado}', debe estar confirmada`);
+      }
 
       // Verificar que no existe factura para esta reserva
       console.log('🔍 Verificando facturas existentes...');
