@@ -126,15 +126,32 @@ export async function enviarEmailComprobanteResend(data: ComprobanteEmailData): 
         subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
         html: htmlContent
       });
+      
+      // Verificar si hubo error en la respuesta
+      if (result && 'error' in result && result.error) {
+        throw new Error((result.error as any).error || 'Error con dominio personalizado');
+      }
+      
+      console.log('✅ Email enviado con dominio personalizado');
+      
     } catch (domainError) {
       console.warn('⚠️ Error con dominio personalizado, intentando con dominio por defecto:', domainError);
+      
       // Fallback: usar dominio por defecto de Resend
-      result = await resend.emails.send({
-        from: 'onboarding@resend.dev', // Dominio por defecto de Resend
-        to: data.clienteEmail,
-        subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
-        html: htmlContent
-      });
+      try {
+        result = await resend.emails.send({
+          from: 'onboarding@resend.dev', // Dominio por defecto de Resend
+          to: data.clienteEmail,
+          subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
+          html: htmlContent
+        });
+        
+        console.log('✅ Email enviado con dominio por defecto');
+        
+      } catch (fallbackError) {
+        console.error('❌ Error también con dominio por defecto:', fallbackError);
+        throw fallbackError;
+      }
     }
 
     console.log('✅ Email enviado exitosamente con Resend, ID:', result.data?.id || 'N/A');
