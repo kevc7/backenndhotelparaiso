@@ -488,9 +488,29 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             WHERE rh.reserva_id = $1
           `, [reservaId]);
 
+          // Obtener comprobante de pago asociado
+          const comprobanteQuery = await client.query(`
+            SELECT 
+              cp.ruta_archivo,
+              cp.metodo_pago,
+              cp.monto,
+              cp.fecha_pago,
+              cp.observaciones
+            FROM comprobantes_pago cp
+            WHERE cp.reserva_id = $1
+            ORDER BY cp.fecha_creacion DESC
+            LIMIT 1
+          `, [reservaId]);
+
           if (reservaCompleta.rows.length > 0) {
             const reserva = reservaCompleta.rows[0];
             const habitaciones = habitacionesEmail.rows;
+            const comprobante = comprobanteQuery.rows.length > 0 ? comprobanteQuery.rows[0] : null;
+
+            // Calcular precio total
+            const precioTotal = habitaciones.reduce((total: number, hab: any) => {
+              return total + parseFloat(hab.precio);
+            }, 0);
 
             const emailData = {
               clienteNombre: reserva.cliente_nombre,
@@ -502,14 +522,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               numeroHuespedes: reserva.numero_huespedes,
               habitaciones: habitaciones.map((hab: any) => ({
                 numero: hab.numero,
-                tipo: hab.tipo_nombre,
-                precio: parseFloat(hab.precio_unitario)
+                tipo: hab.tipo,
+                precio: parseFloat(hab.precio)
               })),
-              precioTotal: total,
-              estado: 'confirmada'
+              precioTotal: precioTotal,
+              estado: estado,
+              comprobante: comprobante ? {
+                url: comprobante.ruta_archivo,
+                metodoPago: comprobante.metodo_pago,
+                monto: parseFloat(comprobante.monto),
+                fechaPago: comprobante.fecha_pago,
+                observaciones: comprobante.observaciones
+              } : null
             };
 
             console.log('📧 Enviando email a:', emailData.clienteEmail);
+            console.log('📧 Estado de la reserva:', estado);
+            console.log('📧 Precio total:', precioTotal);
+            console.log('📧 Comprobante encontrado:', !!emailData.comprobante);
+            
             const emailResult = await enviarEmailReservaResend(emailData);
             
             if (emailResult.success) {

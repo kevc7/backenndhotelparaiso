@@ -1,31 +1,34 @@
-# Script para probar confirmacion de reserva y generacion de factura en BD
-$BASE_URL = "https://backenndhotelparaiso.vercel.app"
+# Script para probar la confirmación de reserva y envío de email
+$backendUrl = "https://backenhotelparaiso.vercel.app"
 
-Write-Host "=== PRUEBA CONFIRMACION RESERVA Y FACTURA EN BD ===" -ForegroundColor Green
+Write-Host "🧪 PROBANDO CONFIRMACIÓN DE RESERVA Y EMAIL" -ForegroundColor Green
+Write-Host "===============================================" -ForegroundColor Green
 
-# 1. Obtener reservas pendientes
-Write-Host "1. Obteniendo reservas pendientes..." -ForegroundColor Yellow
+# 1. Verificar que el backend esté funcionando
+Write-Host "`n1️⃣ Verificando que el backend esté funcionando..." -ForegroundColor Yellow
 try {
-    $reservas = Invoke-WebRequest -Uri "$BASE_URL/api/reservas" -Method GET
-    $reservasData = $reservas.Content | ConvertFrom-Json
+    $healthResponse = Invoke-RestMethod -Uri "$backendUrl/api/health" -Method GET
+    Write-Host "✅ Backend funcionando: $($healthResponse.message)" -ForegroundColor Green
+} catch {
+    Write-Host "❌ Error conectando al backend: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+
+# 2. Buscar una reserva pendiente para confirmar
+Write-Host "`n2️⃣ Buscando reserva pendiente para confirmar..." -ForegroundColor Yellow
+try {
+    $reservasResponse = Invoke-RestMethod -Uri "$backendUrl/api/reservas" -Method GET
+    $reservaPendiente = $reservasResponse.data | Where-Object { $_.estado -eq "pendiente" } | Select-Object -First 1
     
-    if ($reservasData.success) {
-        $reservaPendiente = $reservasData.data | Where-Object { $_.estado -eq 'pendiente' } | Select-Object -First 1
-        
-        if ($reservaPendiente) {
-            Write-Host "✅ Reserva pendiente encontrada: ID $($reservaPendiente.id)" -ForegroundColor Green
-            Write-Host "   Cliente ID: $($reservaPendiente.cliente_id)" -ForegroundColor Cyan
-            Write-Host "   Estado actual: $($reservaPendiente.estado)" -ForegroundColor Cyan
-        } else {
-            Write-Host "⚠️ No hay reservas pendientes, usando una confirmada para re-test" -ForegroundColor Yellow
-            $reservaPendiente = $reservasData.data | Where-Object { $_.estado -eq 'confirmada' } | Select-Object -First 1
-            if (!$reservaPendiente) {
-                Write-Host "❌ No hay reservas disponibles" -ForegroundColor Red
-                exit 1
-            }
-        }
+    if ($reservaPendiente) {
+        Write-Host "✅ Reserva pendiente encontrada:" -ForegroundColor Green
+        Write-Host "   - ID: $($reservaPendiente.id)" -ForegroundColor White
+        Write-Host "   - Código: $($reservaPendiente.codigo_reserva)" -ForegroundColor White
+        Write-Host "   - Cliente: $($reservaPendiente.cliente_nombre) $($reservaPendiente.cliente_apellido)" -ForegroundColor White
+        Write-Host "   - Email: $($reservaPendiente.cliente_email)" -ForegroundColor White
     } else {
-        Write-Host "❌ No se pudieron obtener reservas" -ForegroundColor Red
+        Write-Host "❌ No se encontraron reservas pendientes" -ForegroundColor Red
+        Write-Host "💡 Primero crea una reserva desde el frontend" -ForegroundColor Yellow
         exit 1
     }
 } catch {
@@ -33,74 +36,60 @@ try {
     exit 1
 }
 
-# 2. Verificar facturas antes de confirmar
-Write-Host "2. Verificando facturas existentes ANTES..." -ForegroundColor Yellow
-try {
-    $facturasBefore = Invoke-WebRequest -Uri "$BASE_URL/api/facturas?reserva_id=$($reservaPendiente.id)" -Method GET
-    $facturasBeforeData = $facturasBefore.Content | ConvertFrom-Json
-    
-    if ($facturasBeforeData.success) {
-        Write-Host "📊 Facturas ANTES: $($facturasBeforeData.data.Count)" -ForegroundColor Cyan
-        if ($facturasBeforeData.data.Count -gt 0) {
-            Write-Host "   Ya existe factura: $($facturasBeforeData.data[0].codigo_factura)" -ForegroundColor Yellow
-        }
-    }
-} catch {
-    Write-Host "⚠️ Error verificando facturas antes: $($_.Exception.Message)" -ForegroundColor Yellow
-}
-
 # 3. Confirmar la reserva
-Write-Host "3. Confirmando reserva..." -ForegroundColor Yellow
-$body = @{
+Write-Host "`n3️⃣ Confirmando reserva..." -ForegroundColor Yellow
+$confirmacionData = @{
     estado = "confirmada"
+    observaciones = "Reserva confirmada por staff - prueba de email"
 } | ConvertTo-Json
 
 try {
-    $confirmResponse = Invoke-WebRequest -Uri "$BASE_URL/api/reservas/$($reservaPendiente.id)" -Method PUT -Body $body -ContentType "application/json"
-    $confirmData = $confirmResponse.Content | ConvertFrom-Json
+    $confirmacionResponse = Invoke-RestMethod -Uri "$backendUrl/api/reservas/$($reservaPendiente.id)" -Method PUT -Body $confirmacionData -ContentType "application/json"
     
-    if ($confirmData.success) {
+    if ($confirmacionResponse.success) {
         Write-Host "✅ Reserva confirmada exitosamente!" -ForegroundColor Green
-        Write-Host "   Estado nuevo: $($confirmData.data.estado)" -ForegroundColor Cyan
+        Write-Host "📧 Email debería haberse enviado a: $($reservaPendiente.cliente_email)" -ForegroundColor Cyan
+        Write-Host "🧾 Factura debería haberse generado automáticamente" -ForegroundColor Cyan
     } else {
-        Write-Host "❌ Error confirmando reserva: $($confirmData.message)" -ForegroundColor Red
-        exit 1
+        Write-Host "❌ Error confirmando reserva: $($confirmacionResponse.message)" -ForegroundColor Red
     }
 } catch {
-    Write-Host "❌ Error en petición de confirmación: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+    Write-Host "❌ Error en la petición de confirmación: $($_.Exception.Message)" -ForegroundColor Red
 }
 
-# 4. Esperar un momento para que se procese
-Write-Host "4. Esperando procesamiento..." -ForegroundColor Yellow
-Start-Sleep -Seconds 3
-
-# 5. Verificar facturas después de confirmar
-Write-Host "5. Verificando facturas DESPUÉS..." -ForegroundColor Yellow
+# 4. Verificar que la reserva se confirmó
+Write-Host "`n4️⃣ Verificando estado de la reserva..." -ForegroundColor Yellow
 try {
-    $facturasAfter = Invoke-WebRequest -Uri "$BASE_URL/api/facturas?reserva_id=$($reservaPendiente.id)" -Method GET
-    $facturasAfterData = $facturasAfter.Content | ConvertFrom-Json
+    $reservaActualizada = Invoke-RestMethod -Uri "$backendUrl/api/reservas/$($reservaPendiente.id)" -Method GET
     
-    if ($facturasAfterData.success) {
-        Write-Host "📊 Facturas DESPUÉS: $($facturasAfterData.data.Count)" -ForegroundColor Cyan
-        
-        if ($facturasAfterData.data.Count -gt 0) {
-            Write-Host "🎉 ¡FACTURA GENERADA EN BD!" -ForegroundColor Green
-            $factura = $facturasAfterData.data[0]
-            Write-Host "   Código: $($factura.codigo_factura)" -ForegroundColor Cyan
-            Write-Host "   Estado: $($factura.estado)" -ForegroundColor Cyan
-            Write-Host "   Subtotal: $($factura.subtotal)" -ForegroundColor Cyan
-            Write-Host "   Total: $($factura.total)" -ForegroundColor Cyan
-            Write-Host "   ✅ ¡Las tablas de BD ahora tienen datos!" -ForegroundColor Green
-        } else {
-            Write-Host "❌ NO se generó factura en BD" -ForegroundColor Red
-            Write-Host "   Revisar logs del servidor para más detalles" -ForegroundColor Yellow
-        }
+    if ($reservaActualizada.data.estado -eq "confirmada") {
+        Write-Host "✅ Reserva confirmada correctamente" -ForegroundColor Green
+        Write-Host "📋 Estado actual: $($reservaActualizada.data.estado)" -ForegroundColor White
     } else {
-        Write-Host "❌ Error obteniendo facturas después: $($facturasAfterData.message)" -ForegroundColor Red
+        Write-Host "❌ La reserva no se confirmó correctamente" -ForegroundColor Red
     }
 } catch {
-    Write-Host "❌ Error verificando facturas después: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "❌ Error verificando reserva: $($_.Exception.Message)" -ForegroundColor Red
 }
 
-Write-Host "`n=== PRUEBA COMPLETADA ===" -ForegroundColor Green 
+# 5. Verificar facturas generadas
+Write-Host "`n5️⃣ Verificando facturas generadas..." -ForegroundColor Yellow
+try {
+    $facturasResponse = Invoke-RestMethod -Uri "$backendUrl/api/facturas?reserva_id=$($reservaPendiente.id)" -Method GET
+    
+    if ($facturasResponse.data -and $facturasResponse.data.Length -gt 0) {
+        Write-Host "✅ Factura generada exitosamente:" -ForegroundColor Green
+        Write-Host "   - Código: $($facturasResponse.data[0].codigo_factura)" -ForegroundColor White
+        Write-Host "   - Estado: $($facturasResponse.data[0].estado)" -ForegroundColor White
+    } else {
+        Write-Host "⚠️ No se encontraron facturas para esta reserva" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "❌ Error verificando facturas: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+Write-Host "`n🎉 PRUEBA COMPLETADA" -ForegroundColor Green
+Write-Host "===============================================" -ForegroundColor Green
+Write-Host "📧 Verifica que el email llegó a: $($reservaPendiente.cliente_email)" -ForegroundColor Cyan
+Write-Host "📋 Revisa los logs en Vercel para ver el proceso completo" -ForegroundColor Cyan
+Write-Host "🔗 URL del backend: $backendUrl" -ForegroundColor Cyan 

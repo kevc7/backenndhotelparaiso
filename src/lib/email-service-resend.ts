@@ -35,6 +35,13 @@ interface ReservaEmailData {
   }>;
   precioTotal: number;
   estado: 'confirmada' | 'cancelada';
+  comprobante?: {
+    url: string;
+    metodoPago: string;
+    monto: number;
+    fechaPago: string;
+    observaciones?: string;
+  } | null;
 }
 
 // Función para enviar email de comprobante usando Resend
@@ -199,19 +206,24 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
           .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; }
           .info-box { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981; }
           .total { background: #10b981; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 18px; font-weight: bold; margin: 20px 0; }
+          .factura-box { background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; }
           .footer { text-align: center; margin-top: 30px; padding: 20px; background: #f3f4f6; border-radius: 8px; color: #6b7280; }
+          .habitacion-item { background: #f8fafc; padding: 10px; margin: 5px 0; border-radius: 5px; border-left: 3px solid #10b981; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div style="font-size: 48px; margin-bottom: 15px;">✅</div>
-          <h1>¡Reserva Confirmada!</h1>
+          <div style="font-size: 48px; margin-bottom: 15px;">${data.estado === 'confirmada' ? '✅' : '❌'}</div>
+          <h1>${data.estado === 'confirmada' ? '¡Reserva Confirmada!' : 'Reserva Cancelada'}</h1>
           <p>Hotel Paraíso Verde</p>
         </div>
         
         <div class="content">
           <h2>Estimado/a ${data.clienteNombre} ${data.clienteApellido},</h2>
-          <p>¡Excelentes noticias! Tu reserva ha sido <strong>confirmada exitosamente</strong>.</p>
+          ${data.estado === 'confirmada' 
+            ? '<p>¡Excelentes noticias! Tu reserva ha sido <strong>confirmada exitosamente</strong>.</p>'
+            : '<p>Tu reserva ha sido <strong>cancelada</strong> según tu solicitud.</p>'
+          }
           
           <div class="info-box">
             <h3>📋 Detalles de tu Reserva</h3>
@@ -222,11 +234,45 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
             <p><strong>Habitaciones:</strong> ${data.habitaciones.length}</p>
           </div>
           
+          ${data.habitaciones.length > 0 ? `
+            <div class="info-box">
+              <h3>🏠 Habitaciones Reservadas</h3>
+              ${data.habitaciones.map(hab => `
+                <div class="habitacion-item">
+                  <strong>Habitación ${hab.numero}</strong> - ${hab.tipo}<br>
+                  <span style="color: #059669;">$${hab.precio.toFixed(2)}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+          
           <div class="total">
             💰 Total: $${data.precioTotal.toFixed(2)}
           </div>
           
-          <p>¡Esperamos darte la bienvenida muy pronto!</p>
+          ${data.estado === 'confirmada' ? `
+            <div class="factura-box">
+              <h3>🧾 Factura Generada</h3>
+              <p>Se ha generado automáticamente tu factura electrónica.</p>
+              <p>La factura estará disponible en tu perfil de cliente.</p>
+            </div>
+          ` : ''}
+          
+          ${data.comprobante ? `
+            <div class="info-box">
+              <h3>📄 Comprobante de Pago</h3>
+              <p><strong>Método de Pago:</strong> ${data.comprobante.metodoPago}</p>
+              <p><strong>Monto Pagado:</strong> $${data.comprobante.monto.toFixed(2)}</p>
+              <p><strong>Fecha de Pago:</strong> ${new Date(data.comprobante.fechaPago).toLocaleDateString('es-ES')}</p>
+              ${data.comprobante.observaciones ? `<p><strong>Observaciones:</strong> ${data.comprobante.observaciones}</p>` : ''}
+              <p><strong>📎 Ver Comprobante:</strong> <a href="${data.comprobante.url}" target="_blank" style="color: #059669; text-decoration: underline;">Hacer clic aquí</a></p>
+            </div>
+          ` : ''}
+          
+          ${data.estado === 'confirmada' 
+            ? '<p>¡Esperamos darte la bienvenida muy pronto!</p>'
+            : '<p>Si tienes alguna pregunta sobre la cancelación, no dudes en contactarnos.</p>'
+          }
           <p>Atentamente,<br><strong>Equipo Hotel Paraíso Verde</strong></p>
         </div>
         
@@ -244,12 +290,42 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
 
     console.log('📧 Enviando email con Resend a:', data.clienteEmail);
     
-    const result = await resend.emails.send({
-      from: 'Hotel Paraíso Verde <reservas@hotelparaiso.com>',
-      to: data.clienteEmail,
-      subject: asunto,
-      html: htmlContent
-    });
+    // Intentar enviar con dominio personalizado primero
+    let result;
+    try {
+      result = await resend.emails.send({
+        from: 'Hotel Paraíso Verde <reservas@hotelparaiso.com>',
+        to: data.clienteEmail,
+        subject: asunto,
+        html: htmlContent
+      });
+      
+      // Verificar si hubo error en la respuesta
+      if (result && 'error' in result && result.error) {
+        throw new Error((result.error as any).error || 'Error con dominio personalizado');
+      }
+      
+      console.log('✅ Email enviado con dominio personalizado');
+      
+    } catch (domainError) {
+      console.warn('⚠️ Error con dominio personalizado, intentando con dominio por defecto:', domainError);
+      
+      // Fallback: usar dominio por defecto de Resend
+      try {
+        result = await resend.emails.send({
+          from: 'onboarding@resend.dev', // Dominio por defecto de Resend
+          to: data.clienteEmail,
+          subject: asunto,
+          html: htmlContent
+        });
+        
+        console.log('✅ Email enviado con dominio por defecto');
+        
+      } catch (fallbackError) {
+        console.error('❌ Error también con dominio por defecto:', fallbackError);
+        throw fallbackError;
+      }
+    }
 
     console.log('✅ Email de reserva enviado exitosamente con Resend, ID:', result.data?.id || 'N/A');
     
