@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/database";
 import { generarFacturaPDF, generarNumeroFactura, calcularImpuestos } from '@/lib/pdf-generator';
 import { uploadToDrive, getSubFolder } from '@/lib/google-drive';
+import { enviarEmailReserva, enviarFacturaPorEmail } from '@/lib/email-service';
 
 // Función para generar factura directamente
 async function generarFacturaInterna(reservaId: number, staffId: number = 1, existingClient?: any) {
@@ -209,6 +210,40 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1, exi
         `, [uploadResult.webViewLink, facturaResult.rows[0].id]);
 
         console.log('✅ URL de PDF actualizada en BD');
+
+        // 📧 ENVIAR FACTURA POR EMAIL
+        console.log('📧 Enviando factura por email al cliente...');
+        try {
+          const facturaEmailData = {
+            clienteNombre: reserva.nombre,
+            clienteApellido: reserva.apellido,
+            clienteEmail: reserva.email,
+            numeroFactura: numeroFactura,
+            codigoReserva: reserva.codigo_reserva,
+            fechaEmision: new Date().toISOString(),
+            subtotal: subtotal,
+            impuestos: impuestos,
+            total: total,
+            habitaciones: habitaciones.map((hab: any) => ({
+              descripcion: `Habitación ${hab.numero} - ${hab.tipo_nombre}`,
+              cantidad: hab.noches,
+              precio: parseFloat(hab.precio_unitario),
+              subtotal: parseFloat(hab.subtotal)
+            }))
+          };
+
+          const emailResult = await enviarFacturaPorEmail(facturaEmailData, pdfBuffer);
+          
+          if (emailResult.success) {
+            console.log('✅ Factura enviada por email exitosamente:', emailResult.message);
+          } else {
+            console.error('❌ Error enviando factura por email:', emailResult.message);
+            // No fallar la operación por el email, solo loguearlo
+          }
+        } catch (emailError) {
+          console.error('❌ Error en proceso de email de factura:', emailError);
+          // No fallar la operación por el email
+        }
 
       } catch (pdfError) {
         console.error('❌ Error generando/subiendo PDF:', pdfError);
@@ -454,6 +489,71 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       await client.query('COMMIT');
       console.log('✅ Reserva actualizada y transacción confirmada');
+
+      // 📧 ENVIAR EMAIL DE NOTIFICACIÓN (después del commit)
+      if (estado && estado !== estadoActual && (estado === 'confirmada' || estado === 'cancelada')) {
+        console.log('📧 Iniciando envío de email de notificación...');
+        try {
+          // Obtener datos completos de la reserva para el email
+          const reservaCompleta = await client.query(`
+            SELECT 
+              r.*,
+              c.nombre as cliente_nombre,
+              c.apellido as cliente_apellido,
+              c.email as cliente_email
+            FROM reservas r
+            LEFT JOIN clientes c ON r.cliente_id = c.id
+            WHERE r.id = $1
+          `, [reservaId]);
+
+          // Obtener habitaciones de la reserva
+          const habitacionesEmail = await client.query(`
+            SELECT 
+              h.numero,
+              th.nombre as tipo,
+              rh.precio_unitario as precio
+            FROM reserva_habitaciones rh
+            JOIN habitaciones h ON rh.habitacion_id = h.id
+            JOIN tipos_habitacion th ON h.tipo_habitacion_id = th.id
+            WHERE rh.reserva_id = $1
+          `, [reservaId]);
+
+          if (reservaCompleta.rows.length > 0) {
+            const reserva = reservaCompleta.rows[0];
+            const habitaciones = habitacionesEmail.rows;
+
+            const emailData = {
+              clienteNombre: reserva.cliente_nombre,
+              clienteApellido: reserva.cliente_apellido,
+              clienteEmail: reserva.cliente_email,
+              codigoReserva: reserva.codigo_reserva,
+              fechaEntrada: reserva.fecha_entrada,
+              fechaSalida: reserva.fecha_salida,
+              numeroHuespedes: reserva.numero_huespedes,
+              habitaciones: habitaciones.map((hab: any) => ({
+                numero: hab.numero,
+                tipo: hab.tipo,
+                precio: parseFloat(hab.precio)
+              })),
+              precioTotal: parseFloat(reserva.precio_total),
+              estado: estado as 'confirmada' | 'cancelada'
+            };
+
+            console.log('📧 Enviando email a:', emailData.clienteEmail);
+            const emailResult = await enviarEmailReserva(emailData);
+            
+            if (emailResult.success) {
+              console.log('✅ Email enviado exitosamente:', emailResult.message);
+            } else {
+              console.error('❌ Error enviando email:', emailResult.message);
+              // No fallar la operación por el email, solo loguearlo
+            }
+          }
+        } catch (emailError) {
+          console.error('❌ Error en proceso de email:', emailError);
+          // No fallar la operación por el email
+        }
+      }
 
       return NextResponse.json({
         success: true,

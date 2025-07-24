@@ -327,3 +327,68 @@ Si tienes problemas durante el despliegue:
 **🎉 ¡Una vez completado este proceso, tu backend estará listo para producción!**
 
 *Última actualización: Enero 2025* 
+
+# 📧 Variables de Entorno para Emails
+
+Para que el sistema de notificaciones por email funcione, necesitas configurar estas variables adicionales:
+
+## Configuración de Gmail SMTP
+
+```bash
+EMAIL_USER=tu_email@gmail.com
+EMAIL_APP_PASSWORD=tu_contraseña_de_aplicacion_gmail
+```
+
+### 🔐 Cómo obtener la contraseña de aplicación de Gmail:
+
+1. **Habilitar 2FA**: Primero debes tener la verificación en dos pasos activada en tu cuenta Gmail
+2. **Generar contraseña de aplicación**:
+   - Ve a [myaccount.google.com](https://myaccount.google.com)
+   - Seguridad → Verificación en dos pasos → Contraseñas de aplicaciones
+   - Selecciona "Correo" y "Otro (nombre personalizado)"
+   - Escribe "Hotel Paraiso Backend"
+   - Google te dará una contraseña de 16 caracteres
+   - Usa esa contraseña en `EMAIL_APP_PASSWORD` (sin espacios)
+
+### 📧 Configuración Recomendada:
+
+```bash
+# Email principal del hotel
+EMAIL_USER=hotelparaisoverde@gmail.com
+EMAIL_APP_PASSWORD=abcd efgh ijkl mnop  # Sin espacios al configurar
+```
+
+## Variables de Entorno Completas
+
+Asegúrate de tener todas estas variables configuradas en Vercel:
+
+```bash
+# Base de Datos
+DATABASE_URL=postgresql://postgres:password@paraisobd-db.fly.dev:5432/postgres?sslmode=require
+
+# NextAuth
+NEXTAUTH_URL=https://tu-backend.vercel.app
+NEXTAUTH_SECRET=tu_secreto_super_seguro_aqui
+
+# Google Drive API  
+GOOGLE_OAUTH_CLIENT_ID=tu_client_id
+GOOGLE_OAUTH_CLIENT_SECRET=tu_client_secret
+GOOGLE_REFRESH_TOKEN=tu_refresh_token
+
+# Sistema de Emails (NUEVO)
+EMAIL_USER=hotelparaisoverde@gmail.com
+EMAIL_APP_PASSWORD=tu_contraseña_aplicacion_gmail
+```
+
+## 🧪 Probar el Sistema de Emails
+
+Una vez configurado, puedes probar:
+
+1. **Crear una reserva** desde el frontend
+2. **Confirmar la reserva** desde el dashboard staff
+3. **Verificar** que llegue el email de confirmación
+4. **Revisar logs** en Vercel para debugging
+
+El sistema enviará emails automáticamente cuando:
+- ✅ Se **confirme** una reserva (email de confirmación)
+- ❌ Se **cancele** una reserva (email de cancelación) 
