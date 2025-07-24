@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDbPool } from "@/lib/database";
 import { generarFacturaPDF, generarNumeroFactura, calcularImpuestos } from '@/lib/pdf-generator';
 import { uploadToDrive, getSubFolder } from '@/lib/google-drive';
-import { enviarEmailReserva, enviarFacturaPorEmail } from '@/lib/email-service';
+import { enviarEmailReservaResend, enviarEmailComprobanteResend } from '@/lib/email-service-resend';
 
 // Función para generar factura directamente
 async function generarFacturaInterna(reservaId: number, staffId: number = 1, existingClient?: any) {
@@ -232,7 +232,7 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1, exi
             }))
           };
 
-          const emailResult = await enviarFacturaPorEmail(facturaEmailData, pdfBuffer);
+          const emailResult = await enviarEmailReservaResend(facturaEmailData);
           
           if (emailResult.success) {
             console.log('✅ Factura enviada por email exitosamente:', emailResult.message);
@@ -540,7 +540,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             };
 
             console.log('📧 Enviando email a:', emailData.clienteEmail);
-            const emailResult = await enviarEmailReserva(emailData);
+            const emailResult = await enviarEmailReservaResend(emailData);
             
             if (emailResult.success) {
               console.log('✅ Email enviado exitosamente:', emailResult.message);

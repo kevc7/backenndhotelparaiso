@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/database';
 import { uploadToDrive, getSubFolder } from '@/lib/google-drive';
-import { enviarEmailComprobante } from '@/lib/email-service';
+import { enviarEmailComprobanteResend } from '@/lib/email-service-resend';
 
 // GET - Listar comprobantes de pago
 export async function GET(request: NextRequest) {
@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
       };
 
       console.log('📧 Enviando email a:', emailData.clienteEmail);
-      const emailResult = await enviarEmailComprobante(emailData);
+      const emailResult = await enviarEmailComprobanteResend(emailData);
       
       if (emailResult.success) {
         console.log('✅ Email de comprobante enviado exitosamente:', emailResult.message);
