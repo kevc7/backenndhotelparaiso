@@ -112,7 +112,7 @@ export async function enviarEmailComprobanteResend(data: ComprobanteEmailData): 
       html: htmlContent
     });
 
-    console.log('✅ Email enviado exitosamente con Resend, ID:', result.id);
+    console.log('✅ Email enviado exitosamente con Resend, ID:', result.data?.id);
     
     return {
       success: true,
@@ -202,7 +202,7 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
       html: htmlContent
     });
 
-    console.log('✅ Email de reserva enviado exitosamente con Resend, ID:', result.id);
+    console.log('✅ Email de reserva enviado exitosamente con Resend, ID:', result.data?.id);
     
     return {
       success: true,
