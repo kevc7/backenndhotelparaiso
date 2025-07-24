@@ -12,7 +12,7 @@ const authOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Contraseña", type: "password" }
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -33,7 +33,7 @@ const authOptions = {
               email: user.email,
               nombre: user.nombre,
               apellido: user.apellido,
-              role: user.rol // <-- aquí cambiamos a 'role'
+              rol: user.rol
             };
           }
           return null;
@@ -49,7 +49,7 @@ const authOptions = {
   callbacks: {
     async jwt({ token, user }: { token: any; user?: any }) {
       if (user) {
-        token.role = user.role;
+        token.rol = user.rol;
         token.nombre = user.nombre;
         token.id = user.id;
       }
@@ -57,7 +57,7 @@ const authOptions = {
     },
     async session({ session, token }: { session: any; token: any }) {
       if (token) {
-        session.user.role = token.role;
+        session.user.rol = token.rol;
         session.user.nombre = token.nombre;
         session.user.id = token.id;
       }
