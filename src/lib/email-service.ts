@@ -1,8 +1,7 @@
 import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
 
 // Configuración del transportador de email (compatible con Vercel)
-export function createEmailTransporter(): Transporter {
+export function createEmailTransporter() {
   console.log('🔧 Creando transportador de email...');
   
   if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
