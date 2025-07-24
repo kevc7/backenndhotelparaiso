@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
 // Configuración del transportador de email (compatible con Vercel)
-function createEmailTransporter(): Transporter {
+export function createEmailTransporter(): Transporter {
   console.log('🔧 Creando transportador de email...');
   
   if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD) {
@@ -12,7 +12,7 @@ function createEmailTransporter(): Transporter {
   
   console.log('📧 Configurando Gmail SMTP para:', process.env.EMAIL_USER);
   
-  const transporter = nodemailer.createTransporter({
+  return nodemailer.createTransporter({
     service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER,
@@ -20,13 +20,8 @@ function createEmailTransporter(): Transporter {
     },
     tls: {
       rejectUnauthorized: false
-    },
-    pool: true, // Usar connection pooling
-    maxConnections: 1,
-    maxMessages: 3
+    }
   });
-
-  return transporter;
 }
 
 // Interfaz para datos de la reserva
