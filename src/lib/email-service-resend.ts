@@ -42,6 +42,12 @@ interface ReservaEmailData {
     fechaPago: string;
     observaciones?: string;
   } | null;
+  factura?: {
+    codigo: string;
+    url: string;
+    total: number;
+    fechaCreacion: string;
+  } | null;
 }
 
 // Función para enviar email de comprobante usando Resend
@@ -254,7 +260,14 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
             <div class="factura-box">
               <h3>🧾 Factura Generada</h3>
               <p>Se ha generado automáticamente tu factura electrónica.</p>
-              <p>La factura estará disponible en tu perfil de cliente.</p>
+              ${data.factura ? `
+                <div class="mt-3 p-3 bg-white rounded border">
+                  <p><strong>Código:</strong> ${data.factura.codigo}</p>
+                  <p><strong>Total:</strong> $${data.factura.total.toFixed(2)}</p>
+                  <p><strong>Fecha:</strong> ${new Date(data.factura.fechaCreacion).toLocaleDateString('es-ES')}</p>
+                  <p><strong>📎 Ver Factura:</strong> <a href="${data.factura.url}" target="_blank" style="color: #059669; text-decoration: underline;">Hacer clic aquí</a></p>
+                </div>
+              ` : '<p>La factura estará disponible en tu perfil de cliente.</p>'}
             </div>
           ` : ''}
           

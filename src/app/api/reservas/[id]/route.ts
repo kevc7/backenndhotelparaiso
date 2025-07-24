@@ -502,10 +502,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             LIMIT 1
           `, [reservaId]);
 
+          // Obtener factura asociada
+          const facturaQuery = await client.query(`
+            SELECT 
+              fc.codigo_factura,
+              fc.url_pdf,
+              fc.total,
+              fc.fecha_creacion
+            FROM facturas_cabecera fc
+            WHERE fc.reserva_id = $1
+            ORDER BY fc.fecha_creacion DESC
+            LIMIT 1
+          `, [reservaId]);
+
           if (reservaCompleta.rows.length > 0) {
             const reserva = reservaCompleta.rows[0];
             const habitaciones = habitacionesEmail.rows;
             const comprobante = comprobanteQuery.rows.length > 0 ? comprobanteQuery.rows[0] : null;
+            const factura = facturaQuery.rows.length > 0 ? facturaQuery.rows[0] : null;
 
             // Calcular precio total
             const precioTotal = habitaciones.reduce((total: number, hab: any) => {
@@ -533,6 +547,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 monto: parseFloat(comprobante.monto),
                 fechaPago: comprobante.fecha_pago,
                 observaciones: comprobante.observaciones
+              } : null,
+              factura: factura ? {
+                codigo: factura.codigo_factura,
+                url: factura.url_pdf,
+                total: parseFloat(factura.total),
+                fechaCreacion: factura.fecha_creacion
               } : null
             };
 
@@ -540,6 +560,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             console.log('📧 Estado de la reserva:', estado);
             console.log('📧 Precio total:', precioTotal);
             console.log('📧 Comprobante encontrado:', !!emailData.comprobante);
+            console.log('📧 Factura encontrada:', !!emailData.factura);
             
             const emailResult = await enviarEmailReservaResend(emailData);
             
