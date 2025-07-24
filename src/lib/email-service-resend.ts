@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-// Configuración de Resend
+// Configuración de Resend con mejor manejo de errores
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Interfaz para datos del comprobante
@@ -42,8 +42,18 @@ export async function enviarEmailComprobanteResend(data: ComprobanteEmailData): 
   console.log('📧 INICIANDO envío de email de comprobante con Resend:', data.codigoReserva);
   
   try {
+    // Verificar que RESEND_API_KEY esté configurada
     if (!process.env.RESEND_API_KEY) {
+      console.error('❌ RESEND_API_KEY no está configurada');
       throw new Error('RESEND_API_KEY no está configurada');
+    }
+
+    console.log('✅ RESEND_API_KEY configurada correctamente');
+
+    // Verificar que el email del destinatario sea válido
+    if (!data.clienteEmail || !data.clienteEmail.includes('@')) {
+      console.error('❌ Email del destinatario inválido:', data.clienteEmail);
+      throw new Error('Email del destinatario inválido');
     }
 
     const htmlContent = `
@@ -104,15 +114,31 @@ export async function enviarEmailComprobanteResend(data: ComprobanteEmailData): 
     `;
 
     console.log('📧 Enviando email con Resend a:', data.clienteEmail);
+    console.log('📧 Remitente: reservas@hotelparaiso.com');
+    console.log('📧 Asunto: Comprobante Recibido -', data.codigoReserva);
     
-    const result = await resend.emails.send({
-      from: 'Hotel Paraíso Verde <reservas@hotelparaiso.com>',
-      to: data.clienteEmail,
-      subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
-      html: htmlContent
-    });
+    // Intentar enviar con dominio personalizado primero
+    let result;
+    try {
+      result = await resend.emails.send({
+        from: 'Hotel Paraíso Verde <reservas@hotelparaiso.com>',
+        to: data.clienteEmail,
+        subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
+        html: htmlContent
+      });
+    } catch (domainError) {
+      console.warn('⚠️ Error con dominio personalizado, intentando con dominio por defecto:', domainError);
+      // Fallback: usar dominio por defecto de Resend
+      result = await resend.emails.send({
+        from: 'onboarding@resend.dev', // Dominio por defecto de Resend
+        to: data.clienteEmail,
+        subject: `📄 Comprobante Recibido - ${data.codigoReserva} - Hotel Paraíso Verde`,
+        html: htmlContent
+      });
+    }
 
-    console.log('✅ Email enviado exitosamente con Resend, ID:', result.data?.id);
+    console.log('✅ Email enviado exitosamente con Resend, ID:', result.data?.id || 'N/A');
+    console.log('📧 Respuesta completa de Resend:', JSON.stringify(result, null, 2));
     
     return {
       success: true,
@@ -121,6 +147,12 @@ export async function enviarEmailComprobanteResend(data: ComprobanteEmailData): 
     
   } catch (error) {
     console.error('❌ Error enviando email con Resend:', error);
+    console.error('📧 Detalles del error:', {
+      message: error instanceof Error ? error.message : 'Error desconocido',
+      stack: error instanceof Error ? error.stack : undefined,
+      data: data
+    });
+    
     return {
       success: false,
       message: `Error al enviar email: ${error instanceof Error ? error.message : 'Error desconocido'}`
@@ -202,7 +234,7 @@ export async function enviarEmailReservaResend(data: ReservaEmailData): Promise<
       html: htmlContent
     });
 
-    console.log('✅ Email de reserva enviado exitosamente con Resend, ID:', result.data?.id);
+    console.log('✅ Email de reserva enviado exitosamente con Resend, ID:', result.data?.id || 'N/A');
     
     return {
       success: true,

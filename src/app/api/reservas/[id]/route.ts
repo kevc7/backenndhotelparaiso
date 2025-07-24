@@ -211,39 +211,9 @@ async function generarFacturaInterna(reservaId: number, staffId: number = 1, exi
 
         console.log('✅ URL de PDF actualizada en BD');
 
-        // 📧 ENVIAR FACTURA POR EMAIL
-        console.log('📧 Enviando factura por email al cliente...');
-        try {
-          const facturaEmailData = {
-            clienteNombre: reserva.nombre,
-            clienteApellido: reserva.apellido,
-            clienteEmail: reserva.email,
-            numeroFactura: numeroFactura,
-            codigoReserva: reserva.codigo_reserva,
-            fechaEmision: new Date().toISOString(),
-            subtotal: subtotal,
-            impuestos: impuestos,
-            total: total,
-            habitaciones: habitaciones.map((hab: any) => ({
-              descripcion: `Habitación ${hab.numero} - ${hab.tipo_nombre}`,
-              cantidad: hab.noches,
-              precio: parseFloat(hab.precio_unitario),
-              subtotal: parseFloat(hab.subtotal)
-            }))
-          };
-
-          const emailResult = await enviarEmailReservaResend(facturaEmailData);
-          
-          if (emailResult.success) {
-            console.log('✅ Factura enviada por email exitosamente:', emailResult.message);
-          } else {
-            console.error('❌ Error enviando factura por email:', emailResult.message);
-            // No fallar la operación por el email, solo loguearlo
-          }
-        } catch (emailError) {
-          console.error('❌ Error en proceso de email de factura:', emailError);
-          // No fallar la operación por el email
-        }
+        // 📧 ENVIAR FACTURA POR EMAIL - TEMPORALMENTE DESHABILITADO
+        console.log('📧 Envío de factura por email temporalmente deshabilitado');
+        // TODO: Implementar función específica para envío de facturas
 
       } catch (pdfError) {
         console.error('❌ Error generando/subiendo PDF:', pdfError);
@@ -532,11 +502,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               numeroHuespedes: reserva.numero_huespedes,
               habitaciones: habitaciones.map((hab: any) => ({
                 numero: hab.numero,
-                tipo: hab.tipo,
-                precio: parseFloat(hab.precio)
+                tipo: hab.tipo_nombre,
+                precio: parseFloat(hab.precio_unitario)
               })),
-              precioTotal: parseFloat(reserva.precio_total),
-              estado: estado as 'confirmada' | 'cancelada'
+              precioTotal: total,
+              estado: 'confirmada'
             };
 
             console.log('📧 Enviando email a:', emailData.clienteEmail);

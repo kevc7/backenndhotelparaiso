@@ -20,16 +20,29 @@ export async function POST(request: NextRequest) {
       reserva: body.codigoReserva
     });
 
+    // Verificar configuración de entorno
+    console.log('🔧 Verificando configuración de entorno...');
+    console.log('📧 RESEND_API_KEY configurada:', !!process.env.RESEND_API_KEY);
+    console.log('📧 NODE_ENV:', process.env.NODE_ENV);
+    console.log('📧 VERCEL_ENV:', process.env.VERCEL_ENV);
+
     // Verificar que RESEND_API_KEY esté configurado
     if (!process.env.RESEND_API_KEY) {
       console.error('❌ RESEND_API_KEY no está configurado');
       return NextResponse.json({
         success: false,
-        message: 'RESEND_API_KEY no está configurado en las variables de entorno'
+        message: 'RESEND_API_KEY no está configurado en las variables de entorno',
+        config: {
+          hasResendKey: false,
+          nodeEnv: process.env.NODE_ENV,
+          vercelEnv: process.env.VERCEL_ENV
+        }
       }, { status: 500 });
     }
 
     console.log('✅ RESEND_API_KEY configurado correctamente');
+    console.log('📧 Longitud de la API key:', process.env.RESEND_API_KEY.length);
+    console.log('📧 Prefijo de la API key:', process.env.RESEND_API_KEY.substring(0, 10) + '...');
 
     // Enviar email de prueba
     const result = await enviarEmailComprobanteResend({
@@ -52,13 +65,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'Email de prueba enviado exitosamente',
-        data: result
+        data: result,
+        config: {
+          hasResendKey: true,
+          nodeEnv: process.env.NODE_ENV,
+          vercelEnv: process.env.VERCEL_ENV
+        }
       });
     } else {
       console.error('❌ Error enviando email de prueba:', result.message);
       return NextResponse.json({
         success: false,
-        message: `Error enviando email: ${result.message}`
+        message: `Error enviando email: ${result.message}`,
+        config: {
+          hasResendKey: true,
+          nodeEnv: process.env.NODE_ENV,
+          vercelEnv: process.env.VERCEL_ENV
+        }
       }, { status: 500 });
     }
 
@@ -66,7 +89,12 @@ export async function POST(request: NextRequest) {
     console.error('❌ Error en endpoint de prueba:', error);
     return NextResponse.json({
       success: false,
-      message: `Error interno: ${error instanceof Error ? error.message : 'Error desconocido'}`
+      message: `Error interno: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      config: {
+        hasResendKey: !!process.env.RESEND_API_KEY,
+        nodeEnv: process.env.NODE_ENV,
+        vercelEnv: process.env.VERCEL_ENV
+      }
     }, { status: 500 });
   }
 } 
